@@ -1,5 +1,10 @@
 from pydub import AudioSegment
-from pydub.effects import speedup
+# from pydub.effects import speedup
+import librosa, numpy as np
+import soundfile as sf
+from audiostretchy.stretch import stretch_audio
+import os
+import ffmpy
 
 def convert_file_to_dict(file_name: str) -> dict:
     """Converts the contents of <file_name>
@@ -231,8 +236,13 @@ def speedup_osu_file(d: dict, rate: float) -> dict:
     # Also speeding up the audio in this step
     # Using the <orig_rate> variable here because I want to keep this name
     # consistent with the (potentially scaled down) rate.
-    speedup_audio_file(d["[General]"]["AudioFilename"], rate, f"{orig_rate}-{d['[General]']['AudioFilename']}")
-    d["[General]"]["AudioFilename"] = f"{orig_rate}-{d['[General]']['AudioFilename']}"
+
+    # I'm going to need the name of the audio file without the .mp3, 
+    # because I'm going to replace it with a .wav file.
+
+    filename_no_path = d["[General]"]["AudioFilename"][:d["[General]"]["AudioFilename"].rfind(".")]
+    speedup_audio_file(d["[General]"]["AudioFilename"], rate, f"{orig_rate}-{filename_no_path}.mp3")
+    d["[General]"]["AudioFilename"] = f"{orig_rate}-{filename_no_path}.mp3"
 
     return d
 
@@ -306,15 +316,18 @@ def speedup_audio_file(input_path, rate, output_path):
     Currently also pitches up audio; I want to avoid this.
     (Or maybe make it toggleable)
     """
-    input_audio = AudioSegment.from_file(input_path)
+    # input_audio = AudioSegment.from_file(input_path)
+    #
+    # sound_with_tempo = input_audio._spawn(input_audio.raw_data, overrides={
+    #     "frame_rate": int(input_audio.frame_rate * rate)
+    # })
+    #
+    # output_audio = sound_with_tempo.set_frame_rate(input_audio.frame_rate)
+    #
+    # output_audio.export(output_path, format="mp3")
 
-    sound_with_tempo = input_audio._spawn(input_audio.raw_data, overrides={
-        "frame_rate": int(input_audio.frame_rate * rate)
-    })
-
-    output_audio = sound_with_tempo.set_frame_rate(input_audio.frame_rate)
-
-    output_audio.export(output_path, format="mp3")
+    ff = ffmpy.FFmpeg(inputs={input_path: None}, outputs={output_path: ["-filter:a", f"atempo={rate}"]})
+    ff.run()
 
     return
 
@@ -323,7 +336,7 @@ if __name__ == "__main__":
     # This is terrible!!!
     # I should make all of these options
     # Better yet, add a GUI!
-    rate = 1.4
+    rate = 1.3
     d = convert_file_to_dict("./Sakamoto Maaya - Okaerinasai (tomatomerde Remix) (Azer) [Collab].osu")
     new_d = speedup_osu_file(d, rate)
     convert_dict_to_file(new_d, f"./Sakamoto Maaya - Okaerinasai (tomatomerde Remix) (Azer) [Collab {rate}x].osu")
