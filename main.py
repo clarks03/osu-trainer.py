@@ -70,6 +70,43 @@ def speedup_osu_file(d: dict, rate: float) -> dict:
     by <rate> times.
     Also handles audio speedup in this stage.
     """
+    # Setting the difficulty name up here.
+    # I'm doing this because the rate might potentially be decreased in future steps,
+    # and I want to keep the diffnames consistent.
+    d["[Metadata]"]["Version"] = f"{d['[Metadata]']['Version']} {rate}x"
+
+    # Before we do anything, we're going to simulate generating the approach rate and 
+    # overall difficulty.
+    # If either of them are >10, we will divide the rate by 1.5,
+    # and scale it up later (using the double time mod).
+
+    # I'm not going to document the calculations here;
+    # it is better documented below (when I actually set the approach rate &
+    # overall difficulty).
+    orig_rate = rate
+    approach_rate = int(d["[Difficulty]"]["ApproachRate"])
+    if approach_rate < 5:
+        preempt = 1200 + 600 * (5 - approach_rate) / 5
+    elif approach_rate > 5:
+        preempt = 1200 - 750 * (approach_rate - 5) / 5
+    else:
+        preempt = 1200
+    preempt /= rate
+
+    if preempt > 1200:
+        new_approach_rate = (preempt - 1800) / -120
+    elif preempt < 1200:
+        new_approach_rate = (preempt - 1950) / -150
+    else:
+        new_approach_rate = 5
+    overall_difficulty = int(d["[Difficulty]"]["OverallDifficulty"])
+    hit_window = 80 - 6 * overall_difficulty
+    hit_window /= rate
+    new_overall_difficulty = (hit_window - 80) / -6
+
+    if new_approach_rate > 10 or new_overall_difficulty > 10:
+        rate /= 1.5
+
     # General adjustments
     d["[General]"]["AudioLeadIn"] = round(int(d["[General]"]["AudioLeadIn"]) / rate)
     d["[General]"]["PreviewTime"] = round(int(d["[General]"]["PreviewTime"]) / rate)
@@ -85,9 +122,6 @@ def speedup_osu_file(d: dict, rate: float) -> dict:
 
         d["[Editor]"]["Bookmarks"] = ",".join([str(i) for i in editor_bookmarks_adjusted])
 
-    # Metadata Adjustments
-    # Changing the difficulty name to include the rate
-    d["[Metadata]"]["Version"] = f"{d['[Metadata]']['Version']} {rate}x"
 
     # Difficulty Adjustments
 
@@ -195,11 +229,10 @@ def speedup_osu_file(d: dict, rate: float) -> dict:
 
 
     # Also speeding up the audio in this step
-    speedup_audio_file(d["[General]"]["AudioFilename"], rate, f"fast-{d['[General]']['AudioFilename']}")
-
-    # And adding it to the .osu file :3 
-    d["[General]"]["AudioFilename"] = f"fast-{d['[General]']['AudioFilename']}"
-
+    # Using the <orig_rate> variable here because I want to keep this name
+    # consistent with the (potentially scaled down) rate.
+    speedup_audio_file(d["[General]"]["AudioFilename"], rate, f"{orig_rate}-{d['[General]']['AudioFilename']}")
+    d["[General]"]["AudioFilename"] = f"{orig_rate}-{d['[General]']['AudioFilename']}"
 
     return d
 
@@ -290,7 +323,7 @@ if __name__ == "__main__":
     # This is terrible!!!
     # I should make all of these options
     # Better yet, add a GUI!
-    rate = 1.3
+    rate = 1.4
     d = convert_file_to_dict("./Sakamoto Maaya - Okaerinasai (tomatomerde Remix) (Azer) [Collab].osu")
     new_d = speedup_osu_file(d, rate)
     convert_dict_to_file(new_d, f"./Sakamoto Maaya - Okaerinasai (tomatomerde Remix) (Azer) [Collab {rate}x].osu")
